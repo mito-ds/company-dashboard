@@ -9,13 +9,19 @@ from typing import Any, Dict, Tuple
 from datetime import datetime, timedelta
 from datetime import datetime
 from dateutil import rrule
+
+def get_secret(key):
+    if key in os.environ:
+        return os.environ[key]
+    else:
+        return st.secrets[key]
  
 
 def get_mixpanel_query(payload: str, headers: Dict[str, str]) -> Dict[str, Any]:
-    service_account_username = os.environ['MIXPANEL_SERVICE_ACCOUNT_USERNAME']
-    service_account_password = os.environ['MIXPANEL_SERVICE_ACCOUNT_PASSWORD']
+    service_account_username = get_secret('MIXPANEL_SERVICE_ACCOUNT_USERNAME')
+    service_account_password = get_secret('MIXPANEL_SERVICE_ACCOUNT_PASSWORD')
 
-    url = "https://mixpanel.com/api/2.0/engage?project_id=" + os.environ['MIXPANEL_PROJECT_ID']
+    url = "https://mixpanel.com/api/2.0/engage?project_id=" + get_secret('MIXPANEL_PROJECT_ID')
 
     response = requests.post(url, data=payload, headers=headers, auth=(service_account_username, service_account_password))
     response = json.loads(response.text)
