@@ -1,14 +1,15 @@
+import json
 import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import requests
 import streamlit as st
-import json
-from typing import Any, Dict, Tuple
-from datetime import datetime, timedelta
-from datetime import datetime
 from dateutil import rrule
+
 
 def get_secret(key):
     if key in os.environ:
@@ -86,16 +87,94 @@ def get_mixpanel_data():
 
     return df
 
+def do_brex_api_call(path, next_cursor=None) -> Tuple[List, Optional[str]]:
+    url = "https://platform.brexapis.com/v2/" + path + ('' if next_cursor is None else f'?cursor={next_cursor}')
+
+    headers = {"Authorization": f"Bearer {get_secret('BREX_API_TOKEN')}"}
+
+    response = requests.get(url, headers=headers)
+
+    data = response.json()
+    return data['items'], data['next_cursor'] if 'next_cursor' in data else None
+
+
+USE_BREX_TRANSACTION_CACHE = True
+BREX_TRANSACTION_DATA_PATH = 'brex_transaction_data.csv'
+
+def get_brex_transaction_data():
+
+    if os.path.exists(BREX_TRANSACTION_DATA_PATH) and USE_BREX_TRANSACTION_CACHE:
+        df = pd.read_csv(BREX_TRANSACTION_DATA_PATH)
+    else:
+        path = 'transactions/cash/' + get_secret('BREX_CASH_ACCOUNT_ID')
+        data, cursor = do_brex_api_call(path)
+        while cursor is not None:
+            new_data, cursor = do_brex_api_call(path, cursor)
+            data.extend(new_data)
+
+        # We go through and parse our amount and currency
+        for d in data:
+            d['currency'] = d['amount']['currency']
+            d['amount'] = float(d['amount']['amount']) / 100
+            d['month'] = pd.to_datetime(d['posted_at_date']).replace(day=1)
+
+        df = pd.DataFrame(data)    
+        df.to_csv(BREX_TRANSACTION_DATA_PATH, index=False)
+    
+    return df
+
+
+USE_BREX_ACCOUNT_CACHE = False
+BREX_ACCOUNT_DATA_PATH = 'brex_account_data.csv'
+
+def get_brex_account_data():
+    if os.path.exists(BREX_ACCOUNT_DATA_PATH) and USE_BREX_ACCOUNT_CACHE:
+        df = pd.read_csv(BREX_ACCOUNT_DATA_PATH)
+    else:
+        path = "accounts/cash/" + get_secret('BREX_CASH_ACCOUNT_ID') + "/statements"
+        data, cursor = do_brex_api_call(path)
+        while cursor is not None:
+            new_data, cursor = do_brex_api_call(path, cursor)
+            data.extend(new_data)
+
+        for d in data:
+            d['start_date'] = d['period']['start_date']
+            d['end_date'] = d['period']['end_date']
+            d['start_balance'] = float(d['start_balance']['amount']) / 100
+            d['end_balance'] = float(d['end_balance']['amount']) / 100
+
+        df = pd.DataFrame(data)
+        df.to_csv(BREX_ACCOUNT_DATA_PATH, index=False)
+
+    return df
+
 st.title('Mito Company Dashboard')
 
+financial_tab, mixpanel_tab = st.tabs(["Financials", "Mixpanel"])
 
-mixpanel_data = get_mixpanel_data()
+with financial_tab:
+    st.header("Brex Data")
+    brex_transaction_data = get_brex_transaction_data()
+    brex_account_data = get_brex_account_data()
 
-st.subheader('Installs')
-st.line_chart(mixpanel_data, x='Month', y='Num Installs')
-st.subheader('Finished Signup')
-st.line_chart(mixpanel_data, x='Month', y='Num Signups')
-st.subheader('Install Success Rate')
-st.line_chart(mixpanel_data, x='Month', y='Install Success Rate')
+    # Brex things
+    stripe_revenue = brex_transaction_data[(brex_transaction_data['amount'] >= 0) & (brex_transaction_data['description'] == 'STRIPE - TRANSFER')]
+    st.plotly_chart(px.bar(stripe_revenue, x='month', y='amount', title='Stripe Revenue'))
 
+    expenses = brex_transaction_data[brex_transaction_data['amount'] < 0].copy()
+    expenses['amount'] = expenses['amount'] * -1
+    st.plotly_chart(px.bar(expenses, x='month', y='amount', title='Expenses'))
+
+    st.plotly_chart(px.line(brex_account_data, x='start_date', y='start_balance', title='Money in Bank All Time'))
+
+
+
+with mixpanel_tab:
+    st.header("Mixpanel Data")
+    mixpanel_data = get_mixpanel_data()
+
+    # Mixpanel things
+    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Num Installs', title='Num Installs'))
+    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Num Signups', title='Num Finished Signups'))
+    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Install Success Rate', title='Install Success Rate'))
 
