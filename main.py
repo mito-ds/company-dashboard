@@ -66,7 +66,7 @@ def get_first_seen_and_signed_up_per_month(start_date: datetime, end_date: datet
 USE_MIXPANEL_CACHE = True
 MIXPANEL_DATA_PATH = 'mixpanel_data.csv'
 
-def get_mixpanel_data():
+def get_mixpanel_signup_data():
 
     # dates
     if os.path.exists(MIXPANEL_DATA_PATH) and USE_MIXPANEL_CACHE:
@@ -124,7 +124,7 @@ def get_brex_transaction_data():
     return df
 
 
-USE_BREX_ACCOUNT_CACHE = False
+USE_BREX_ACCOUNT_CACHE = True
 BREX_ACCOUNT_DATA_PATH = 'brex_account_data.csv'
 
 def get_brex_account_data():
@@ -142,11 +142,17 @@ def get_brex_account_data():
             d['end_date'] = d['period']['end_date']
             d['start_balance'] = float(d['start_balance']['amount']) / 100
             d['end_balance'] = float(d['end_balance']['amount']) / 100
+            d['burn'] = d['start_balance'] - d['end_balance']
 
         df = pd.DataFrame(data)
         df.to_csv(BREX_ACCOUNT_DATA_PATH, index=False)
 
     return df
+
+def get_runway_string(balance: float, burn: float) -> str:
+    if burn < 0:
+        return f'${round(burn)}, so runway is infinite.'
+    return f'${round(burn)}, for a runway of {round(balance / burn / 12)} years.'
 
 st.title('Mito Company Dashboard')
 
@@ -163,18 +169,55 @@ with financial_tab:
 
     expenses = brex_transaction_data[brex_transaction_data['amount'] < 0].copy()
     expenses['amount'] = expenses['amount'] * -1
-    st.plotly_chart(px.bar(expenses, x='month', y='amount', title='Expenses'))
+    summed_expenses = expenses.groupby('month').sum(numeric_only=True).reset_index()
+    st.plotly_chart(px.bar(summed_expenses, x='month', y='amount', title='Expenses'))
+
+    payroll_expenses = brex_transaction_data[(brex_transaction_data['amount'] < 0) & (brex_transaction_data['description'] == 'RIPPLING - PAYROLL')].copy()
+    payroll_expenses['amount'] = payroll_expenses['amount'] * -1
+    summed_payroll_expenses = payroll_expenses.groupby('month').sum(numeric_only=True).reset_index()
+    st.plotly_chart(px.bar(summed_payroll_expenses, x='month', y='amount', title='Payroll Expenses'))
 
     st.plotly_chart(px.line(brex_account_data, x='start_date', y='start_balance', title='Money in Bank All Time'))
+
+
+    st.header("Runway Calculations")
+    # Calculate runway, across a bunch of different metrics
+    balance = brex_account_data['end_balance'].iloc[0]
+    st.text("Balance at end of last statement: {:,}".format(balance))
+    number_months = st.slider('Number of Months to Consider in Burn Estimates', min_value=1, max_value=6)
+    # TODO: allow the user to change some assumptions (e.g. add some adjustment of increasing expenses)
+
+    # First, calculate for net burn
+    min_net_burn = brex_account_data['burn'].head(number_months).min()
+    st.text(f'Minimum net burn in the last {number_months} months: {get_runway_string(balance, min_net_burn)}')
+
+    max_net_burn = brex_account_data['burn'].head(number_months).max()
+    st.text(f'Maxiumum net burn in the last {number_months} months: {get_runway_string(balance, max_net_burn)}')
+
+    avg_net_burn = brex_account_data['burn'].head(number_months).mean()
+    st.text(f'Average net burn in the last {number_months} months: {get_runway_string(balance, avg_net_burn)}')
+
+    # Then, calculate for just expenses
+    summed_expenses = expenses.groupby('month').sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False).head(number_months)
+    min_gross_burn = summed_expenses['amount'].min()
+    st.text(f'Minimum gross burn in the last {number_months} months: {get_runway_string(balance, min_gross_burn)}')
+
+    max_gross_burn = summed_expenses['amount'].max()
+    st.text(f'Maxiumum gross burn in the last {number_months} months: {get_runway_string(balance, max_gross_burn)}')
+
+    avg_gross_burn = summed_expenses['amount'].mean()
+    st.text(f'Average gross burn in the last {number_months} months: {get_runway_string(balance, avg_gross_burn)}')
+
+
 
 
 
 with mixpanel_tab:
     st.header("Mixpanel Data")
-    mixpanel_data = get_mixpanel_data()
+    mixpanel_signup_data = get_mixpanel_signup_data()
 
     # Mixpanel things
-    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Num Installs', title='Num Installs'))
-    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Num Signups', title='Num Finished Signups'))
-    st.plotly_chart(px.line(mixpanel_data, x='Month', y='Install Success Rate', title='Install Success Rate'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Num Installs', title='Num Installs'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Num Signups', title='Num Finished Signups'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Install Success Rate', title='Install Success Rate'))
 
