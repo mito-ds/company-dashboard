@@ -124,7 +124,7 @@ def get_brex_transaction_data():
     return df
 
 
-USE_BREX_ACCOUNT_CACHE = True
+USE_BREX_ACCOUNT_CACHE = False
 BREX_ACCOUNT_DATA_PATH = 'brex_account_data.csv'
 
 def get_brex_account_data():
