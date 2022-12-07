@@ -1,3 +1,4 @@
-streamlit
-plotly==5.11.0
-pandas==1.5.2
+[packages]
+streamlit = "*"
+plotly = "*"
+pandas = "*"
