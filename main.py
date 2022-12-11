@@ -153,6 +153,25 @@ def get_runway_string(balance: float, burn: float) -> str:
         return f'${round(burn)}, so runway is infinite.'
     return f'${round(burn)}, for a runway of {round(balance / burn / 12)} years.'
 
+
+def get_is_default_alive(starting_balance: float, revenue: float, expenses: float, revenue_growth_rate: float) -> bool:
+
+    current_balance = starting_balance
+    current_revenue = revenue
+    while current_balance > 0:
+        if (current_revenue > expenses):
+            return True
+
+        current_balance -= expenses
+
+        if current_balance < 0:
+            return False
+
+        current_balance += current_revenue
+        current_revenue =  current_revenue * (1 + revenue_growth_rate)
+
+    return False
+
 st.title('Mito Company Dashboard')
 
 financial_tab, mixpanel_tab = st.tabs(["Financials", "Mixpanel"])
@@ -162,7 +181,11 @@ with financial_tab:
     brex_transaction_data = get_brex_transaction_data()
     brex_account_data = get_brex_account_data()
 
-    # Brex things
+    # We only look at recent revenue to avoid investment
+    recent_revenue = brex_transaction_data[(brex_transaction_data['amount'] >= 0) & (brex_transaction_data['initiated_at_date'] >= '2022-10-01')]
+    recent_revenue_summed = recent_revenue.groupby('month').sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False)
+    st.plotly_chart(px.bar(recent_revenue_summed, x='month', y='amount', title='Recent Revenue'))
+
     stripe_revenue = brex_transaction_data[(brex_transaction_data['amount'] >= 0) & (brex_transaction_data['description'] == 'STRIPE - TRANSFER')]
     st.plotly_chart(px.bar(stripe_revenue, x='month', y='amount', title='Stripe Revenue'))
 
@@ -178,48 +201,58 @@ with financial_tab:
 
     st.plotly_chart(px.line(brex_account_data, x='start_date', y='start_balance', title='Money in Bank All Time'))
 
+    st.header("Runway")
+    st.write('This section calculates a variety of metrics to show our runway. It allows you to configure some assumptions about our finances, and calculates how long we are alive.')
+    st.subheader('Runway Assumptions')
 
-    st.header("Runway Calculations")
-    # Calculate runway, across a bunch of different metrics
+    number_months = st.slider('Number of Months to Consider', min_value=1, max_value=6)
+
+    current_yearly_salary = summed_payroll_expenses['amount'].iloc[-1] / 3 * 12
+    new_yearly_salary = st.number_input('Yearly Salary (defaults to current)', value=current_yearly_salary, step=1000.0)
+    salary_adjustment = (new_yearly_salary - current_yearly_salary) / 12
+
+    revenue_growth_rate = st.number_input('Monthly Revenue Growth (%)', value=.25)
+
+    # Print the current balance
+    st.subheader('Runway Calculations')
     balance = brex_account_data['end_balance'].iloc[0]
+
+    # First, calculate all the terms we need below
+    min_revenue = recent_revenue_summed['amount'].min()
+    max_revenue = recent_revenue_summed['amount'].max()
+    avg_revenue = recent_revenue_summed['amount'].mean()
+    summed_expenses = expenses.groupby('month').sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False).head(number_months)
+    min_gross_burn = summed_expenses['amount'].min() + salary_adjustment
+    max_gross_burn = summed_expenses['amount'].max() + salary_adjustment
+    avg_gross_burn = summed_expenses['amount'].mean() + salary_adjustment
+    min_net_burn = brex_account_data['burn'].head(number_months).min() + salary_adjustment
+    max_net_burn = brex_account_data['burn'].head(number_months).max() + salary_adjustment
+    avg_net_burn = brex_account_data['burn'].head(number_months).mean() + salary_adjustment
+
+
+    # First, we calculate default alive under the worst possible assumptions
+    worst_case_default_alive = get_is_default_alive(balance, min_revenue, max_gross_burn, revenue_growth_rate)
+    avg_case_default_alive = get_is_default_alive(balance, avg_revenue, avg_gross_burn, revenue_growth_rate)
+    best_case_default_alive = get_is_default_alive(balance, max_revenue, min_gross_burn, revenue_growth_rate)
+
+    st.text(f'Worst case default alive: {worst_case_default_alive}')
+    st.text(f'Average case default alive: {avg_case_default_alive}')
+    st.text(f'Best case default alive: {best_case_default_alive}')
+
+
     st.text("Balance at end of last statement: {:,}".format(balance))
-    number_months = st.slider('Number of Months to Consider in Burn Estimates', min_value=1, max_value=6)
-    # TODO: allow the user to change some assumptions (e.g. add some adjustment of increasing expenses)
 
     # First, calculate for net burn
-    min_net_burn = brex_account_data['burn'].head(number_months).min()
     st.text(f'Minimum net burn in the last {number_months} months: {get_runway_string(balance, min_net_burn)}')
-
-    max_net_burn = brex_account_data['burn'].head(number_months).max()
     st.text(f'Maxiumum net burn in the last {number_months} months: {get_runway_string(balance, max_net_burn)}')
-
-    avg_net_burn = brex_account_data['burn'].head(number_months).mean()
     st.text(f'Average net burn in the last {number_months} months: {get_runway_string(balance, avg_net_burn)}')
 
     # Then, calculate for just expenses
-    summed_expenses = expenses.groupby('month').sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False).head(number_months)
-    min_gross_burn = summed_expenses['amount'].min()
     st.text(f'Minimum gross burn in the last {number_months} months: {get_runway_string(balance, min_gross_burn)}')
-
-    max_gross_burn = summed_expenses['amount'].max()
     st.text(f'Maxiumum gross burn in the last {number_months} months: {get_runway_string(balance, max_gross_burn)}')
-
-    avg_gross_burn = summed_expenses['amount'].mean()
     st.text(f'Average gross burn in the last {number_months} months: {get_runway_string(balance, avg_gross_burn)}')
 
-    st.header("Yearly Salary")
-    current_monthly_expenses = summed_payroll_expenses['amount'].iloc[-1]
-    new_yearly_salary = st.number_input('New Salary', value=current_monthly_expenses / 3 * 12, step=1000.0)
-
-    # New expenses
-    new_min_net_burn = min_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
-    new_max_net_burn = max_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
-    new_avg_net_burn = avg_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
-
-    st.text(f'New minimum net burn in the last {number_months} months: {get_runway_string(balance, new_min_net_burn)}')
-    st.text(f'New maxiumum net burn in the last {number_months} months: {get_runway_string(balance, new_max_net_burn)}')
-    st.text(f'New average net burn in the last {number_months} months: {get_runway_string(balance, new_avg_net_burn)}')
-
+    
 
 with mixpanel_tab:
     st.header("Mixpanel Data")
