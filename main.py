@@ -207,8 +207,18 @@ with financial_tab:
     avg_gross_burn = summed_expenses['amount'].mean()
     st.text(f'Average gross burn in the last {number_months} months: {get_runway_string(balance, avg_gross_burn)}')
 
+    st.header("Yearly Salary")
+    current_monthly_expenses = summed_payroll_expenses['amount'].iloc[-1]
+    new_yearly_salary = st.number_input('New Salary', value=current_monthly_expenses / 3 * 12, step=1000.0)
 
+    # New expenses
+    new_min_net_burn = min_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
+    new_max_net_burn = max_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
+    new_avg_net_burn = avg_net_burn - (current_monthly_expenses / 3) + (new_yearly_salary / 12 * 3)
 
+    st.text(f'New minimum net burn in the last {number_months} months: {get_runway_string(balance, new_min_net_burn)}')
+    st.text(f'New maxiumum net burn in the last {number_months} months: {get_runway_string(balance, new_max_net_burn)}')
+    st.text(f'New average net burn in the last {number_months} months: {get_runway_string(balance, new_avg_net_burn)}')
 
 
 with mixpanel_tab:
