@@ -63,13 +63,12 @@ def get_first_seen_and_signed_up_per_month(start_date: datetime, end_date: datet
     return len(with_emails), len(profiles) 
 
 
-USE_MIXPANEL_CACHE = True
 MIXPANEL_DATA_PATH = 'mixpanel_data.csv'
 
-def get_mixpanel_signup_data():
+def get_mixpanel_signup_data(use_mixpanel_cache):
 
     # dates
-    if os.path.exists(MIXPANEL_DATA_PATH) and USE_MIXPANEL_CACHE:
+    if os.path.exists(MIXPANEL_DATA_PATH) and use_mixpanel_cache:
         df = pd.read_csv(MIXPANEL_DATA_PATH)
     else:
         print("Pulling from Mixpanel")
@@ -98,12 +97,12 @@ def do_brex_api_call(path, next_cursor=None) -> Tuple[List, Optional[str]]:
     return data['items'], data['next_cursor'] if 'next_cursor' in data else None
 
 
-USE_BREX_TRANSACTION_CACHE = True
+use_brex_transaction_cache = True
 BREX_TRANSACTION_DATA_PATH = 'brex_transaction_data.csv'
 
 def get_brex_transaction_data():
 
-    if os.path.exists(BREX_TRANSACTION_DATA_PATH) and USE_BREX_TRANSACTION_CACHE:
+    if os.path.exists(BREX_TRANSACTION_DATA_PATH) and use_brex_transaction_cache:
         df = pd.read_csv(BREX_TRANSACTION_DATA_PATH)
     else:
         path = 'transactions/cash/' + get_secret('BREX_CASH_ACCOUNT_ID')
@@ -124,11 +123,11 @@ def get_brex_transaction_data():
     return df
 
 
-USE_BREX_ACCOUNT_CACHE = False
+use_brex_account_cache = True
 BREX_ACCOUNT_DATA_PATH = 'brex_account_data.csv'
 
 def get_brex_account_data():
-    if os.path.exists(BREX_ACCOUNT_DATA_PATH) and USE_BREX_ACCOUNT_CACHE:
+    if os.path.exists(BREX_ACCOUNT_DATA_PATH) and use_brex_account_cache:
         df = pd.read_csv(BREX_ACCOUNT_DATA_PATH)
     else:
         path = "accounts/cash/" + get_secret('BREX_CASH_ACCOUNT_ID') + "/statements"
@@ -214,7 +213,8 @@ with financial_tab:
 
 with mixpanel_tab:
     st.header("Mixpanel Data")
-    mixpanel_signup_data = get_mixpanel_signup_data()
+    do_refresh = st.button('Refresh Cache')
+    mixpanel_signup_data = get_mixpanel_signup_data(use_mixpanel_cache=not do_refresh)
 
     # Mixpanel things
     st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Num Installs', title='Num Installs'))
