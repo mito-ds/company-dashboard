@@ -135,37 +135,6 @@ def get_is_default_alive(starting_balance: float, revenue: float, expenses: floa
 
     return False
 
-stripe_cache = 'stripe_subscriptions.csv'
-
-def get_stripe_subscriptions():
-    if os.path.exists(stripe_cache):
-        df = pd.read_csv(stripe_cache)
-        df['start_date'] = pd.to_datetime(df['start_date'])
-        df['end_date'] = pd.to_datetime(df['end_date'], errors='ignore')
-        return df
-    else:
-        import stripe
-        stripe.api_key = get_secret('STRIPE_KEY')
-
-        # We list all subscripts all time
-        subscriptions = []
-        current = stripe.Subscription.list(status='all')['data']
-        while len(current) > 0:
-            subscriptions.extend(current)
-            current = stripe.Subscription.list(status='all', limit=100, starting_after=subscriptions[-1]['id'])['data']
-
-        start_date = []
-        end_date = []
-        price = []
-        for subscription in subscriptions:
-            start_date.append(datetime.fromtimestamp(subscription['start_date']))
-            end_date.append(datetime.fromtimestamp(subscription['ended_at']) if subscription['ended_at'] is not None else None)
-            price.append(subscription['plan']['amount'] / 100)
-
-        df = pd.DataFrame({'start_date': start_date, 'end_date': end_date, 'amount': price})
-        df.to_csv(stripe_cache, index=False)
-    return df
-
 def get_stripe_subscriptions_at_time(stripe_subscriptions: pd.DataFrame, dt: datetime) -> pd.DataFrame:
     return stripe_subscriptions[(stripe_subscriptions['start_date'] < dt) & ((stripe_subscriptions['end_date'].isna()) | (stripe_subscriptions['end_date'] >= dt))]
 
@@ -217,7 +186,7 @@ with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
     brex_account_data = get_snowflake_table_as_df('BREX', 'ACCOUNT_DATA')
     team_customer_data = get_snowflake_table_as_df('TEAMS', 'CUSTOMERS')
-    stripe_subscriptions = get_stripe_subscriptions()
+    stripe_subscriptions = get_snowflake_table_as_df('STRIPE', 'SUBSCRIPTIONS')
 
     st.header('Revenue')
 
