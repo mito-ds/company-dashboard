@@ -1,7 +1,0 @@
-[packages]
-streamlit = "*"
-plotly = "*"
-pandas = "*"
-snowflake-connector-python = "*"
-stripe = "*"
-pyarrow = "10.0.1"
