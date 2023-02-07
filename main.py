@@ -142,8 +142,8 @@ def get_team_customers_at_time(team_customer_data: pd.DataFrame, dt: datetime) -
     return team_customer_data[(team_customer_data['start_date'] < dt) & (team_customer_data['end_date'] >= dt)]
 
 def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team_customer_data: pd.DataFrame, mrr_or_arr: Literal['MRR', 'ARR']) -> pd.DataFrame:    
-    start_date = datetime.now() - timedelta(weeks=52)
-    end_date = datetime.now()
+    start_date = (datetime.now() - timedelta(weeks=52)).replace(day=1)
+    end_date = datetime.now().replace(day=1)
 
     times = []
     stripe_revenues = []
