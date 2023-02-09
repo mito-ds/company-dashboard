@@ -222,11 +222,10 @@ with expense_tab:
 
 with mixpanel_tab:
     st.header("Mixpanel Data")
-    do_refresh = st.button('Refresh Cache')
     mixpanel_signup_data = get_snowflake_table_as_df('MIXPANEL', 'SIGNUPS')
     
     # Mixpanel things
-    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='NUM_INSTALLS', title='Num Installs'))
-    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='NUM_SIGNUPS', title='Num Finished Signups'))
-    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='INSTALL_SUCCESS_RATE', title='Install Success Rate'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_installs', title='Num Installs'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_signups', title='Num Finished Signups'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='install_success_rate', title='Install Success Rate'))
 
