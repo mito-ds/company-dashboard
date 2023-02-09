@@ -26,74 +26,6 @@ def get_secret(key):
     else:
         return st.secrets[key]
 
-def get_mixpanel_query(payload: str, headers: Dict[str, str]) -> Dict[str, Any]:
-    service_account_username = get_secret('MIXPANEL_SERVICE_ACCOUNT_USERNAME')
-    service_account_password = get_secret('MIXPANEL_SERVICE_ACCOUNT_PASSWORD')
-
-    url = "https://mixpanel.com/api/2.0/engage?project_id=" + get_secret('MIXPANEL_PROJECT_ID')
-
-    response = requests.post(url, data=payload, headers=headers, auth=(service_account_username, service_account_password))
-    response = json.loads(response.text)
-    return response
-
-
-def get_mixpanel_paylod_for_first_seen(start_date_str='2022-11-01', end_date_str='2022-11-30') -> str:
-    payload = f"filter_by_cohort=%7B%22raw_cohort%22%3A%7B%22name%22%3A%22%22%2C%22id%22%3Anull%2C%22unsavedId%22%3Anull%2C%22groups%22%3A%5B%7B%22type%22%3A%22cohort_group%22%2C%22event%22%3A%7B%22resourceType%22%3A%22cohort%22%2C%22value%22%3A%22%24all_users%22%2C%22label%22%3A%22All%20Users%22%7D%2C%22filters%22%3A%5B%7B%22resourceType%22%3A%22user%22%2C%22propertyName%22%3A%22%24mp_first_event_time%22%2C%22propertyObjectKey%22%3Anull%2C%22propertyDefaultType%22%3A%22datetime%22%2C%22propertyType%22%3A%22datetime%22%2C%22filterOperator%22%3A%22between%22%2C%22filterValue%22%3A%7B%22type%22%3A%22between%22%2C%22from%22%3A%22{start_date_str}%22%2C%22to%22%3A%22{end_date_str}%22%7D%7D%5D%2C%22filtersOperator%22%3A%22and%22%2C%22behavioralFiltersOperator%22%3A%22and%22%2C%22groupingOperator%22%3Anull%2C%22property%22%3Anull%7D%5D%7D%7D"
-    return payload
-
-
-def get_first_seen_and_signed_up_per_month(start_date: datetime, end_date: datetime) -> Tuple[int, int]:
-
-    # Get those users first seen during a time period
-    payload = 'output_properties=%5B%22%24email%22%5D&' + get_mixpanel_paylod_for_first_seen(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")) 
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/x-www-form-urlencoded"
-    }
-
-    response = get_mixpanel_query(payload, headers)
-    total_count = response['total']
-    page = response['page']
-    session_id = response['session_id']
-
-    profiles = response['results']
-
-    while len(profiles) < total_count:
-        page = page + 1
-        new_payload = payload + f'&session_id={session_id}' + f'&page={page}'
-        response = get_mixpanel_query(new_payload, headers)
-
-        profiles += response['results']
-
-    # TODO: filter out fake emails, n@g.com
-    with_emails = list(filter(lambda x: '$email' in x['$properties'], profiles))
-
-    return len(with_emails), len(profiles) 
-
-
-MIXPANEL_DATA_PATH = 'mixpanel_data.csv'
-
-def get_mixpanel_signup_data(use_mixpanel_cache):
-
-    # dates
-    if os.path.exists(MIXPANEL_DATA_PATH) and use_mixpanel_cache:
-        df = pd.read_csv(MIXPANEL_DATA_PATH)
-    else:
-        print("Pulling from Mixpanel")
-        end_date = datetime.now()
-        end_date = (end_date.replace(day=1) + timedelta(days=32)).replace(day=1)
-        
-        arr = []
-        for start_date, end_date in zip(rrule.rrule(rrule.MONTHLY, dtstart=datetime(2022, 1, 1), until=end_date), rrule.rrule(rrule.MONTHLY, dtstart=datetime(2022, 2, 1), until=end_date)):
-            #print(start_date, end_date)
-            num_signups, num_installs = get_first_seen_and_signed_up_per_month(start_date, end_date)
-            arr.append((start_date, num_signups, num_installs, num_signups / num_installs))
-
-        df = pd.DataFrame(arr, columns=['Month', 'Num Signups', 'Num Installs', 'Install Success Rate'])
-        df.to_csv(MIXPANEL_DATA_PATH, index=False)
-
-    return df
-
 def get_snowflake_table_as_df(schema: str, table: str) -> pd.DataFrame:
     con = snowflake.connector.connect(
         user=get_secret('SNOWFLAKE_USERNAME'), 
@@ -291,10 +223,10 @@ with expense_tab:
 with mixpanel_tab:
     st.header("Mixpanel Data")
     do_refresh = st.button('Refresh Cache')
-    mixpanel_signup_data = get_mixpanel_signup_data(use_mixpanel_cache=not do_refresh)
-
+    mixpanel_signup_data = get_snowflake_table_as_df('MIXPANEL', 'SIGNUPS')
+    
     # Mixpanel things
-    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Num Installs', title='Num Installs'))
-    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Num Signups', title='Num Finished Signups'))
-    st.plotly_chart(px.line(mixpanel_signup_data, x='Month', y='Install Success Rate', title='Install Success Rate'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='NUM_INSTALLS', title='Num Installs'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='NUM_SIGNUPS', title='Num Finished Signups'))
+    st.plotly_chart(px.line(mixpanel_signup_data, x='MONTH', y='INSTALL_SUCCESS_RATE', title='Install Success Rate'))
 
