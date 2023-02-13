@@ -112,7 +112,7 @@ def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team
 
 st.title('Mito Company Dashboard')
 
-revenue_tab, expense_tab, mixpanel_tab = st.tabs(["Revenue", "Expenses", "Mixpanel"])
+revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic"])
 
 with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
@@ -228,4 +228,10 @@ with mixpanel_tab:
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_installs', title='Num Installs'))
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_signups', title='Num Finished Signups'))
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='install_success_rate', title='Install Success Rate'))
+
+with website_traffic_tab:
+    st.header('Website Traffic')
+
+    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_DASHBOARD'), height=2500)
+    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_BLOG_DASHBOARD'), height=2500)
 
