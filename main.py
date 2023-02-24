@@ -110,6 +110,37 @@ def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team
         'total_revenue': total_revenue
     })
 
+
+def get_retention_at_x_months(retention_data: pd.DataFrame, month_x: int) -> Dict[datetime, float]:
+    retention_in_month = {}
+    for _, row in retention_data.iterrows():
+        start_date: datetime = row['start_date']
+        initial_size = row['initial_size']
+
+        month_x_date = start_date
+        for m in range(month_x):
+            month_x_date += timedelta(days=32)
+            month_x_date = month_x_date.replace(day=1)
+
+        key = f'period_{month_x_date.strftime("%Y_%m_%d")}'
+        if key in row:
+            num_in_month = row[key]
+            retention_in_month[start_date] = num_in_month / initial_size
+
+    return retention_in_month
+
+def get_retention_dict(retention_data: pd.DataFrame, last_n_months) -> pd.DataFrame:
+    n_months_ago = datetime.now() - timedelta(days=last_n_months*30)
+    values = []
+    for month_x in range(len(retention_data)):
+        retention_in_month = get_retention_at_x_months(retention_data, month_x)
+        for start_date, percent in retention_in_month.items():
+            if start_date > n_months_ago:
+                values.append((month_x, start_date.strftime("%Y_%m_%d"), percent))
+
+    return pd.DataFrame(values, columns=['Month X', 'Start Date', 'Percentage'])
+    
+
 st.title('Mito Company Dashboard')
 
 revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic"])
@@ -223,11 +254,21 @@ with expense_tab:
 with mixpanel_tab:
     st.header("Mixpanel Data")
     mixpanel_signup_data = get_snowflake_table_as_df('MIXPANEL', 'SIGNUPS')
+    mixpanel_retention_data = get_snowflake_table_as_df('MIXPANEL', 'RETENTION')
     
     # Mixpanel things
+    st.subheader('Signup Data')
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_installs', title='Num Installs'))
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='num_signups', title='Num Finished Signups'))
     st.plotly_chart(px.line(mixpanel_signup_data, x='month', y='install_success_rate', title='Install Success Rate'))
+
+    st.subheader('Retention Data')
+    last_n_months = st.slider('Last N Months:', min_value=1, max_value=len(mixpanel_retention_data))
+    retention_data = get_retention_dict(mixpanel_retention_data, last_n_months)
+    st.plotly_chart(px.line(retention_data, x='Month X', y='Percentage', color='Start Date', title='Retention'))
+    during_month = st.slider('Raw Retention Data During Month:', min_value=1, max_value=len(mixpanel_retention_data))
+    all_retention_data = get_retention_dict(mixpanel_retention_data, len(mixpanel_retention_data))
+    st.dataframe(all_retention_data[all_retention_data['Month X'] == during_month])
 
 with website_traffic_tab:
     st.header('Website Traffic')
