@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -140,10 +140,62 @@ def get_retention_dict(retention_data: pd.DataFrame, last_n_months) -> pd.DataFr
 
     return pd.DataFrame(values, columns=['Month X', 'Start Date', 'Percentage'])
     
+def convert_notion_property_to_raw_value(value: Any) -> Union[str, int, float, bool]:
+    if not isinstance(value, dict) and np.isnan(value):
+        return np.NaN
+    elif isinstance(value, dict):
+        if value['type'] == 'title':
+            title_list = value['title']
+            if len(title_list) == 0:
+                return ''
+            else:
+                return title_list[0]['text']['content']
+        if value['type'] == 'rich_text':
+            final_str = ''
+            for t in value['rich_text']:
+                final_str += t['plain_text']
+
+            return final_str
+        elif value['type'] == 'number':
+            return value['number']
+        elif value['type'] == 'multi_select':
+            selected = []
+            for ms in value['multi_select']:
+                selected.append(ms['name'])
+            return ", ".join(selected)
+        elif value['type'] == 'date':
+            return pd.to_datetime(value['date']['start']).date()
+
+    return str(value)
+
+def convert_column_of_notion_properties_to_raw_values(column: pd.Series) -> pd.Series:
+    return column.apply(convert_notion_property_to_raw_value)
+    
+
+def get_notion_database(database_id: str, properties_only=True) -> pd.DataFrame:
+
+    headers = {
+        "Authorization": "Bearer " + get_secret('NOTION_API_KEY'),
+        "Content-Type": "application/json",
+        "Notion-Version": "2021-05-13"
+    }
+
+    url = f"https://api.notion.com/v1/databases/{database_id}/query"
+
+    res = requests.request("POST", url, headers=headers)
+    data = res.json()
+
+    results = pd.DataFrame(data['results'])
+    if properties_only:
+        properties_df = pd.DataFrame(list(results['properties']))
+        return properties_df.apply(lambda col: convert_column_of_notion_properties_to_raw_values(col), axis=1)
+    else:
+        return results
+
 
 st.title('Mito Company Dashboard')
 
-revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic"])
+revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic", "Growth"])
 
 with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
@@ -249,7 +301,6 @@ with expense_tab:
     st.text(f'Maxiumum gross burn in the last {number_months} months: {get_runway_string(balance, max_gross_burn)}')
     st.text(f'Average gross burn in the last {number_months} months: {get_runway_string(balance, avg_gross_burn)}')
 
-    
 
 with mixpanel_tab:
     st.header("Mixpanel Data")
@@ -276,3 +327,21 @@ with website_traffic_tab:
     st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_DASHBOARD'), height=2500)
     st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_BLOG_DASHBOARD'), height=2500)
 
+
+with growth_tab:
+
+    partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918', properties_only=True)
+
+    # Allow the users to see growth tasks in a specific range
+    today = datetime.today()
+    one_week_ago = today - timedelta(days=7)
+    min_date, max_date = st.date_input('Growth Tasks in Date', value=(one_week_ago, today))
+
+    st.header('Growth Work in Previous Week')
+    st.subheader(f'Partnered Content between {min_date}-{max_date}')
+    range_partnered_content = partnered_content[(partnered_content['Date'] >= min_date) & (partnered_content['Date'] <= max_date)]
+    st.dataframe(range_partnered_content)
+
+    st.header('All Growth Trackers')
+    st.subheader('Partnered Content')
+    st.dataframe(partnered_content)
