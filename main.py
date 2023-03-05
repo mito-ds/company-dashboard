@@ -163,8 +163,16 @@ def convert_notion_property_to_raw_value(value: Any) -> Union[str, int, float, b
             for ms in value['multi_select']:
                 selected.append(ms['name'])
             return ", ".join(selected)
+        elif value['type'] == 'select':
+            return value['select']['name']
         elif value['type'] == 'date':
             return pd.to_datetime(value['date']['start']).date()
+        elif value['type'] == 'people':
+            people_list = value['people']
+            if len(people_list) == 0:
+                return ''
+            else:
+                return people_list[0]['name']
 
     return str(value)
 
@@ -195,7 +203,7 @@ def get_notion_database(database_id: str, properties_only=True) -> pd.DataFrame:
 
 st.title('Mito Company Dashboard')
 
-revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic", "Growth"])
+revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab, sales_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic", "Growth", "Sales"])
 
 with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
@@ -337,7 +345,7 @@ with growth_tab:
     one_week_ago = today - timedelta(days=7)
     min_date, max_date = st.date_input('Growth Tasks in Date', value=(one_week_ago, today))
 
-    st.header('Growth Work in Previous Week')
+    st.header(f'Growth Work between {min_date}-{max_date}')
     st.subheader(f'Partnered Content between {min_date}-{max_date}')
     range_partnered_content = partnered_content[(partnered_content['Date'] >= min_date) & (partnered_content['Date'] <= max_date)]
     st.dataframe(range_partnered_content)
@@ -345,3 +353,20 @@ with growth_tab:
     st.header('All Growth Trackers')
     st.subheader('Partnered Content')
     st.dataframe(partnered_content)
+
+with sales_tab:
+
+    outreach_tracker = get_notion_database('39d86e3f7e374c8da71e8285df26d955', properties_only=True)
+
+    # Allow the users to see growth tasks in a specific range
+    today = datetime.today()
+    one_week_ago = today - timedelta(days=7)
+    min_date, max_date = st.date_input('Outreach Tasks in Date', value=(one_week_ago, today))
+
+    st.header(f'Outreach between {min_date}-{max_date}')
+    st.subheader(f'Outreach between {min_date}-{max_date}')
+    range_outreach_tracker = outreach_tracker[(outreach_tracker['Date'] >= min_date) & (outreach_tracker['Date'] <= max_date)]
+    st.dataframe(range_outreach_tracker)
+
+    st.header('All Outreach')
+    st.dataframe(outreach_tracker)
