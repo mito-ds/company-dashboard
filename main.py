@@ -74,7 +74,7 @@ def get_team_customers_at_time(team_customer_data: pd.DataFrame, dt: datetime) -
     return team_customer_data[(team_customer_data['start_date'] < dt) & (team_customer_data['end_date'] >= dt)]
 
 def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team_customer_data: pd.DataFrame, mrr_or_arr: Literal['MRR', 'ARR']) -> pd.DataFrame:    
-    start_date = (datetime.now() - timedelta(weeks=52)).replace(day=1)
+    start_date = (datetime.now() - timedelta(weeks=30)).replace(day=1)
     end_date = datetime.now().replace(day=1)
 
     times = []
@@ -95,6 +95,20 @@ def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team
         teams_revenue.append(team_subs['monthly_amount'].sum())
         teams_subscription_count.append(len(team_subs))
         total_revenue.append(stripe_revenues[-1] + teams_revenue[-1])
+
+    # We then append one more for the current date, so we can see the current price
+    today = datetime.now()
+    if times[-1] != today:
+        stripe_subs = get_stripe_subscriptions_at_time(stripe_subscriptions, today)
+        team_subs = get_team_customers_at_time(team_customer_data, today)
+
+        times.append(today)
+        stripe_revenues.append(stripe_subs['amount'].sum())
+        stripe_subscription_count.append(len(stripe_subs))
+        teams_revenue.append(team_subs['monthly_amount'].sum())
+        teams_subscription_count.append(len(team_subs))
+        total_revenue.append(stripe_revenues[-1] + teams_revenue[-1])
+
 
     if mrr_or_arr == 'ARR':
         stripe_revenues = list(map(lambda x: x * 12, stripe_revenues))
