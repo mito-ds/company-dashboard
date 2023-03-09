@@ -96,7 +96,7 @@ def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team
         teams_subscription_count.append(len(team_subs))
         total_revenue.append(stripe_revenues[-1] + teams_revenue[-1])
 
-    # We then append one more for the current date, so we can see the current price
+    # We then append one more for the current date, so we can see the current revenue
     today = datetime.now()
     if times[-1] != today:
         stripe_subs = get_stripe_subscriptions_at_time(stripe_subscriptions, today)
@@ -108,7 +108,6 @@ def get_revenue_and_customers_dataframe(stripe_subscriptions: pd.DataFrame, team
         teams_revenue.append(team_subs['monthly_amount'].sum())
         teams_subscription_count.append(len(team_subs))
         total_revenue.append(stripe_revenues[-1] + teams_revenue[-1])
-
 
     if mrr_or_arr == 'ARR':
         stripe_revenues = list(map(lambda x: x * 12, stripe_revenues))
@@ -217,7 +216,7 @@ def get_notion_database(database_id: str, properties_only=True) -> pd.DataFrame:
 
 st.title('Mito Company Dashboard')
 
-revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab, sales_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic", "Growth", "Sales"])
+revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab, sales_tab, support_tab = st.tabs(["Revenue", "Expenses", "Mixpanel", "Website Traffic", "Growth", "Sales", "Support"])
 
 with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
@@ -346,13 +345,13 @@ with mixpanel_tab:
 with website_traffic_tab:
     st.header('Website Traffic')
 
-    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_DASHBOARD'), height=2500)
-    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_BLOG_DASHBOARD'), height=2500)
+    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_DASHBOARD'), height=2800)
+    st.components.v1.iframe(get_secret('PLAUSIBLE_TRYMITO_BLOG_DASHBOARD'), height=2800)
 
 
 with growth_tab:
 
-    partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918', properties_only=True)
+    partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918')
 
     # Allow the users to see growth tasks in a specific range
     today = datetime.today()
@@ -370,7 +369,7 @@ with growth_tab:
 
 with sales_tab:
 
-    outreach_tracker = get_notion_database('39d86e3f7e374c8da71e8285df26d955', properties_only=True)
+    outreach_tracker = get_notion_database('39d86e3f7e374c8da71e8285df26d955')
 
     # Allow the users to see growth tasks in a specific range
     today = datetime.today()
@@ -384,3 +383,20 @@ with sales_tab:
 
     st.header('All Outreach')
     st.dataframe(outreach_tracker)
+
+with support_tab:
+
+    support_tracker = get_notion_database('e68d246aca5c4262b1df7095ccecb78e')
+
+     # Allow the users to see growth tasks in a specific range
+    today = datetime.today()
+    one_week_ago = today - timedelta(days=7)
+    min_date, max_date = st.date_input('Support Tasks in Date', value=(one_week_ago, today))
+
+    st.header(f'Support between {min_date}-{max_date}')
+    st.subheader(f'Support between {min_date}-{max_date}')
+    range_support_tracker = support_tracker[(support_tracker['Date'] >= min_date) & (support_tracker['Date'] <= max_date)]
+    st.dataframe(range_support_tracker)
+
+    st.header('All Support')
+    st.dataframe(support_tracker)
