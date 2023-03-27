@@ -352,6 +352,7 @@ with website_traffic_tab:
 with growth_tab:
 
     partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918')
+    blog_promotion_content = get_notion_database('ff34057e55c842799b71f775d105c701')
 
     # Allow the users to see growth tasks in a specific range
     today = datetime.today()
@@ -359,13 +360,18 @@ with growth_tab:
     min_date, max_date = st.date_input('Growth Tasks in Date', value=(one_week_ago, today))
 
     st.header(f'Growth Work between {min_date}-{max_date}')
-    st.subheader(f'Partnered Content between {min_date}-{max_date}')
     range_partnered_content = partnered_content[(partnered_content['Date'] >= min_date) & (partnered_content['Date'] <= max_date)]
+    range_blog_promotion_content = blog_promotion_content[(blog_promotion_content['Date'] >= min_date) & (blog_promotion_content['Date'] <= max_date)]
+    st.subheader(f'Partnered Content between {min_date}-{max_date}')
     st.dataframe(range_partnered_content)
+    st.subheader(f'Blog Content Promotion between {min_date}-{max_date}')
+    st.dataframe(range_blog_promotion_content)
 
     st.header('All Growth Trackers')
     st.subheader('Partnered Content')
     st.dataframe(partnered_content)
+    st.subheader('Blog Content Promotion')
+    st.dataframe(blog_promotion_content)
 
 with sales_tab:
 
