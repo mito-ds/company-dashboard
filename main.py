@@ -358,7 +358,7 @@ with growth_tab:
 
     # Allow the users to see growth tasks in a specific range
     today = datetime.today()
-    one_week_ago = today - timedelta(days=7)r
+    one_week_ago = today - timedelta(days=7)
     min_date, max_date = st.date_input('Growth Tasks in Date', value=(one_week_ago, today))
 
     st.header(f'Growth Work between {min_date}-{max_date}')
