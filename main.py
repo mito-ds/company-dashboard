@@ -220,6 +220,7 @@ revenue_tab, expense_tab, mixpanel_tab, website_traffic_tab, growth_tab, sales_t
 
 with revenue_tab:
     brex_transaction_data = get_snowflake_table_as_df('BREX', 'TRANSACTION_DATA')
+    brex_transaction_data = brex_transaction_data[brex_transaction_data['amount'].abs() < 1_000_000]
     brex_account_data = get_snowflake_table_as_df('BREX', 'ACCOUNT_DATA')
     team_customer_data = get_snowflake_table_as_df('TEAMS', 'CUSTOMERS')
     stripe_subscriptions = get_snowflake_table_as_df('STRIPE', 'SUBSCRIPTIONS')
@@ -352,15 +353,17 @@ with website_traffic_tab:
 with growth_tab:
 
     partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918')
+    partnered_content = partnered_content[partnered_content['Post'] != '']
     blog_promotion_content = get_notion_database('ff34057e55c842799b71f775d105c701')
 
     # Allow the users to see growth tasks in a specific range
     today = datetime.today()
-    one_week_ago = today - timedelta(days=7)
+    one_week_ago = today - timedelta(days=7)r
     min_date, max_date = st.date_input('Growth Tasks in Date', value=(one_week_ago, today))
 
     st.header(f'Growth Work between {min_date}-{max_date}')
     range_partnered_content = partnered_content[(partnered_content['Date'] >= min_date) & (partnered_content['Date'] <= max_date)]
+
     range_blog_promotion_content = blog_promotion_content[(blog_promotion_content['Date'] >= min_date) & (blog_promotion_content['Date'] <= max_date)]
     st.subheader(f'Partnered Content between {min_date}-{max_date}')
     st.dataframe(range_partnered_content)
