@@ -354,6 +354,7 @@ with growth_tab:
 
     partnered_content = get_notion_database('5d5c87d7503b47a3a9622957d6ac7918')
     partnered_content = partnered_content[partnered_content['Post'] != '']
+    partnered_content_reach_outs = get_notion_database('13cfd90e7d47466a85003f78d3054d0e')
     blog_promotion_content = get_notion_database('ff34057e55c842799b71f775d105c701')
 
     # Allow the users to see growth tasks in a specific range
@@ -363,18 +364,23 @@ with growth_tab:
 
     st.header(f'Growth Work between {min_date}-{max_date}')
     range_partnered_content = partnered_content[(partnered_content['Date'] >= min_date) & (partnered_content['Date'] <= max_date)]
+    range_partnered_content_reach_outs = partnered_content_reach_outs[(partnered_content_reach_outs['Date'] >= min_date) & (partnered_content_reach_outs['Date'] <= max_date)]
 
     range_blog_promotion_content = blog_promotion_content[(blog_promotion_content['Date'] >= min_date) & (blog_promotion_content['Date'] <= max_date)]
     st.subheader(f'Partnered Content between {min_date}-{max_date}')
     st.dataframe(range_partnered_content)
     st.subheader(f'Blog Content Promotion between {min_date}-{max_date}')
     st.dataframe(range_blog_promotion_content)
+    st.subheader(f'Partnered Content Reach Outs Between {min_date}-{max_date}')
+    st.dataframe(range_partnered_content_reach_outs)
 
     st.header('All Growth Trackers')
     st.subheader('Partnered Content')
     st.dataframe(partnered_content)
     st.subheader('Blog Content Promotion')
     st.dataframe(blog_promotion_content)
+    st.subheader(f'Partnered Content Reach Outs')
+    st.dataframe(partnered_content_reach_outs)
 
 with sales_tab:
 
@@ -396,6 +402,18 @@ with sales_tab:
 with support_tab:
 
     support_tracker = get_notion_database('e68d246aca5c4262b1df7095ccecb78e')
+    use_case_tracker = get_notion_database('50291dfbbf8d4799ae14120185068a34')
+
+    def get_support_pivot(support_df, column_name):
+        # Pivoted support_tracker into support_tracker_pivot
+        tmp_df = support_df[['Hours', column_name]].copy()
+        pivot_table = tmp_df.pivot_table(
+            index=[column_name],
+            values=['Hours'],
+            aggfunc={'Hours': ['sum']}
+        )
+        support_tracker_pivot = pivot_table.reset_index()
+        return support_tracker_pivot
 
      # Allow the users to see growth tasks in a specific range
     today = datetime.today()
@@ -406,6 +424,16 @@ with support_tab:
     st.subheader(f'Support between {min_date}-{max_date}')
     range_support_tracker = support_tracker[(support_tracker['Date'] >= min_date) & (support_tracker['Date'] <= max_date)]
     st.dataframe(range_support_tracker)
+    st.subheader(f'Per Person Work {min_date}-{max_date}')
+    st.dataframe(get_support_pivot(range_support_tracker, 'Customer Success Agent'))
+    st.subheader(f'Per Company Work {min_date}-{max_date}')
+    st.dataframe(get_support_pivot(range_support_tracker, 'Enterprise'))
+
+    st.subheader(f'Use Cases between {min_date}-{max_date}')
+    range_use_cases = use_case_tracker[(use_case_tracker['Date'] >= min_date) & (use_case_tracker['Date'] <= max_date)]
+    st.dataframe(range_use_cases)
 
     st.header('All Support')
     st.dataframe(support_tracker)
+    st.header('All Use Cases')
+    st.dataframe(use_case_tracker)
