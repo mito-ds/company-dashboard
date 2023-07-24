@@ -239,8 +239,16 @@ with revenue_tab:
 
     # We only look at recent revenue to avoid investment
     recent_revenue = brex_transaction_data[(brex_transaction_data['amount'] >= 0) & (brex_transaction_data['initiated_at_date'] >= pd.to_datetime('2022-10-01'))]
+    st.dataframe(recent_revenue)
+
     recent_revenue_summed = recent_revenue.groupby('month').sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False)
     st.plotly_chart(px.bar(recent_revenue_summed, x='month', y='amount', title='Actual Income (Money Entering Bank Account)'))
+
+    # Split description at the -, and take before it
+    recent_revenue['short description'] = recent_revenue['description'].apply(lambda x: x.split('-')[0])
+    # Look at revenue per month, per short description
+    recent_revenue_summed_by_short_description = recent_revenue.groupby(['month', 'short description']).sum(numeric_only=True).reset_index().sort_values(by='month', ascending=False)
+    st.plotly_chart(px.bar(recent_revenue_summed_by_short_description, x='month', y='amount', color='short description', title='Actual Income (Money Entering Bank Account)'))
 
     st.header("Revenue Breakdown")
 
